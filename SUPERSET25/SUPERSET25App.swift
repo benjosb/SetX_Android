@@ -15,20 +15,73 @@ import UIKit
 class OrientationLock: ObservableObject {
     static let shared = OrientationLock()
     
-    init() {
-        NotificationCenter.default.addObserver(self, 
-            selector: #selector(orientationDidChange), 
-            name: UIDevice.orientationDidChangeNotification, 
-            object: nil)
+    // Oriëntatie-vergrendelingscontroller
+    class PortraitViewController: UIViewController {
+        override var supportedInterfaceOrientations: UIInterfaceOrientationMask {
+            return .portrait
+        }
+        
+        override var preferredInterfaceOrientationForPresentation: UIInterfaceOrientation {
+            return .portrait
+        }
+        
+        override var shouldAutorotate: Bool {
+            return false
+        }
     }
     
-    @objc func orientationDidChange() {
-        // Forceer altijd terug naar portrait
-        UIDevice.current.setValue(UIInterfaceOrientation.portrait.rawValue, forKey: "orientation")
+    // UIWindow extensie voor oriëntatie-vergrendeling
+    private var orientationLockWindow: UIWindow?
+    
+    init() {
+        setupOrientationLock()
+        
+        // Luisteren naar app-levenscyclus
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(applicationDidBecomeActive),
+            name: UIApplication.didBecomeActiveNotification,
+            object: nil
+        )
+    }
+    
+    @objc func applicationDidBecomeActive() {
+        setupOrientationLock()
+        forcePortraitOrientation()
+    }
+    
+    private func setupOrientationLock() {
+        if orientationLockWindow == nil {
+            let windowScene = UIApplication.shared.connectedScenes
+                .first(where: { $0.activationState == .foregroundActive }) as? UIWindowScene
+            
+            if let windowScene = windowScene {
+                let window = UIWindow(windowScene: windowScene)
+                let viewController = PortraitViewController()
+                window.rootViewController = viewController
+                window.isHidden = false
+                window.isUserInteractionEnabled = false
+                window.backgroundColor = .clear
+                orientationLockWindow = window
+            }
+        }
+    }
+    
+    func forcePortraitOrientation() {
+        if let windowScene = UIApplication.shared.connectedScenes
+            .first(where: { $0.activationState == .foregroundActive }) as? UIWindowScene {
+            
+            // Forceer portrait oriëntatie
+            let portraitValue = UIInterfaceOrientation.portrait.rawValue
+            UIDevice.current.setValue(portraitValue, forKey: "orientation")
+            
+            // Update window scene oriëntatie
+            windowScene.requestGeometryUpdate(.iOS(interfaceOrientations: .portrait))
+        }
     }
     
     func lockOrientation() {
-        UIDevice.current.setValue(UIInterfaceOrientation.portrait.rawValue, forKey: "orientation")
+        forcePortraitOrientation()
     }
     
     deinit {
@@ -44,6 +97,10 @@ struct OrientationStateModifier: ViewModifier {
         content
             .onAppear {
                 // Vergrendel naar portrait bij verschijnen
+                orientationLock.lockOrientation()
+            }
+            .onReceive(NotificationCenter.default.publisher(for: UIApplication.didBecomeActiveNotification)) { _ in
+                // Vergrendel opnieuw als de app weer actief wordt
                 orientationLock.lockOrientation()
             }
     }
@@ -2183,6 +2240,47 @@ struct SpelScherm: View {
         ZStack {
             Color.black.ignoresSafeArea()
             VStack {
+                // NAVIGATIEKNOPPEN PERMANENT BOVENAAN PLAATSEN IN OEFENMODUS
+                // Dit garandeert dat ze nooit buiten beeld vallen door safe area issues
+                if viewModel.spelModus == .oefenen {
+                    HStack {
+                        Button(LocalizationManager.text("switch_card")) {
+                            viewModel.wisselWillekeurigeKaart()
+                        }
+                        .padding()
+                        .background(Color.blue.opacity(0.3))
+                        .foregroundColor(.white)
+                        .cornerRadius(10)
+
+                        // Deck teller in het midden
+                        Text("In deck: \(viewModel.aantalKaartenInDeck)")
+                            .foregroundColor(.white)
+                            .padding()
+                            .background(Color.blue.opacity(0.3))
+                            .cornerRadius(10)
+
+                        // Nieuwe knop om te controleren op geldige sets
+                        Button("Check Sets") {
+                            viewModel.checkVoorGeldigeSet()
+                        }
+                        .padding()
+                        .background(Color.green.opacity(0.5))
+                        .foregroundColor(.white)
+                        .cornerRadius(10)
+
+                        Button(LocalizationManager.text("new_game")) {
+                            viewModel.spelFase = .startScherm
+                        }
+                        .padding()
+                        .background(Color.blue.opacity(0.3))
+                        .foregroundColor(.white)
+                        .cornerRadius(10)
+                    }
+                    .padding(.horizontal)
+                    .padding(.top, 10)
+                    .padding(.bottom, 10)
+                }
+                
                 // Speelveld met kaarten
                 LazyVGrid(columns: Array(repeating: GridItem(.flexible()), count: 4), spacing: 10) {
                     ForEach(viewModel.kaarten) { kaart in
@@ -2241,45 +2339,47 @@ struct SpelScherm: View {
                 }
                 .padding()
                 
-                // Knoppen
-                HStack {
-                    Button(LocalizationManager.text("switch_card")) {
-                        viewModel.wisselWillekeurigeKaart()
-                    }
-                    .padding()
-                    .background(Color.blue.opacity(0.3))
-                    .foregroundColor(.white)
-                    .cornerRadius(10)
-
-                    // Deck teller in het midden
-                    Text("In deck: \(viewModel.aantalKaartenInDeck)")
-                        .foregroundColor(.white)
+                // NAVIGATIEKNOPPEN ALLEEN TONEN ALS NIET IN OEFENMODUS
+                if viewModel.spelModus != .oefenen {
+                    HStack {
+                        Button(LocalizationManager.text("switch_card")) {
+                            viewModel.wisselWillekeurigeKaart()
+                        }
                         .padding()
                         .background(Color.blue.opacity(0.3))
+                        .foregroundColor(.white)
                         .cornerRadius(10)
 
-                    // Nieuwe knop om te controleren op geldige sets
-                    Button("Check Sets") {
-                        viewModel.checkVoorGeldigeSet()
-                    }
-                    .padding()
-                    .background(Color.green.opacity(0.5))
-                    .foregroundColor(.white)
-                    .cornerRadius(10)
+                        // Deck teller in het midden
+                        Text("In deck: \(viewModel.aantalKaartenInDeck)")
+                            .foregroundColor(.white)
+                            .padding()
+                            .background(Color.blue.opacity(0.3))
+                            .cornerRadius(10)
 
-                    Button(LocalizationManager.text("new_game")) {
-                        viewModel.spelFase = .startScherm
+                        // Nieuwe knop om te controleren op geldige sets
+                        Button("Check Sets") {
+                            viewModel.checkVoorGeldigeSet()
+                        }
+                        .padding()
+                        .background(Color.green.opacity(0.5))
+                        .foregroundColor(.white)
+                        .cornerRadius(10)
+
+                        Button(LocalizationManager.text("new_game")) {
+                            viewModel.spelFase = .startScherm
+                        }
+                        .padding()
+                        .background(Color.blue.opacity(0.3))
+                        .foregroundColor(.white)
+                        .cornerRadius(10)
+                        
+                        // Debug knop voor het testen van de avatar melding verwijderd
                     }
-                    .padding()
-                    .background(Color.blue.opacity(0.3))
-                    .foregroundColor(.white)
-                    .cornerRadius(10)
-                    
-                    // Debug knop voor het testen van de avatar melding verwijderd
+                    .padding(.horizontal)
+                    .padding(.top)
+                    .padding(.bottom, 5)
                 }
-                .padding(.horizontal)
-                .padding(.top)
-                .padding(.bottom, 5)
             }
             .blur(radius: viewModel.toonGeldigeSet || viewModel.toonOngeldigeSet ? 3 : 0)
             

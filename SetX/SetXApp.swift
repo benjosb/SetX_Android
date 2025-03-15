@@ -2108,7 +2108,7 @@ struct HoekKnop: View {
     let isDraaiend: Bool
     let onTap: () -> Void
     let onReset: () -> Void
-    @State private var rotatie = 0.0
+    // Verplaats de @State variabelen naar waar ze worden gebruikt
     @State private var schaal = 1.0
     @State private var kleurWissel = false
     
@@ -2152,58 +2152,67 @@ struct HoekKnop: View {
                 }
             } else if isDraaiend {
                 // Verbeterde draaiende animatie
-                ZStack {
-                    // Draaiende sterren
-                    ForEach(0..<5) { i in
-                        Image(systemName: "star.fill")
-                            .font(.system(size: 30))
-                            .foregroundColor(kleurWissel ? .yellow : .orange)
-                            .offset(x: 40 * cos(Double(i) * 2 * .pi / 5 + rotatie),
-                                    y: 40 * sin(Double(i) * 2 * .pi / 5 + rotatie))
-                    }
-                    
-                    // Centrale dobbelsteen
-                    Image(systemName: "dice.fill")
-                        .font(.system(size: 40))
-                        .foregroundColor(.white)
-                        .scaleEffect(schaal)
-                        .rotationEffect(.degrees(rotatie * 180 / .pi))
-                        .shadow(color: .white.opacity(0.8), radius: 10)
-                    
-                    // Tekst
-                    Text("SPINNING...")
-                        .font(.caption)
-                        .foregroundColor(.white)
-                        .offset(y: 60)
-                }
-                .onAppear {
-                    // Start animaties
-                    withAnimation(Animation.linear(duration: 1.5).repeatForever(autoreverses: false)) {
-                        rotatie = 2 * .pi
-                    }
-                    
-                    withAnimation(Animation.easeInOut(duration: 0.7).repeatForever(autoreverses: true)) {
-                        schaal = 1.3
-                        kleurWissel.toggle()
-                    }
-                }
+                DraaiAnimatie(schaal: $schaal, kleurWissel: $kleurWissel)
             } else {
                 // Toon "Tap to select" knop
                 VStack {
                     Image(systemName: "dice.fill")
                         .font(.system(size: 40))
                         .foregroundColor(.white)
-                        .shadow(color: .blue.opacity(0.8), radius: 5)
+                        .shadow(color: .white.opacity(0.3), radius: 5)
                     
-                    Text("TAP TO SELECT")
-                        .font(.headline)
+                    Text("Tap to select")
+                        .font(.caption)
                         .foregroundColor(.white)
+                        .padding(.top, 8)
+                }
+                .onTapGesture {
+                    onTap()
                 }
             }
         }
-        .onTapGesture {
-            if geselecteerdeAvatar == nil && !isDraaiend {
-                onTap()
+    }
+}
+
+struct DraaiAnimatie: View {
+    @Binding var schaal: Double
+    @Binding var kleurWissel: Bool
+    @State private var rotatie = 0.0
+    
+    var body: some View {
+        ZStack {
+            // Draaiende sterren
+            ForEach(0..<5) { i in
+                Image(systemName: "star.fill")
+                    .font(.system(size: 30))
+                    .foregroundColor(kleurWissel ? .yellow : .orange)
+                    .offset(x: 40 * cos(Double(i) * 2 * .pi / 5 + rotatie),
+                            y: 40 * sin(Double(i) * 2 * .pi / 5 + rotatie))
+            }
+            
+            // Centrale dobbelsteen
+            Image(systemName: "dice.fill")
+                .font(.system(size: 40))
+                .foregroundColor(.white)
+                .scaleEffect(schaal)
+                .rotationEffect(.degrees(rotatie * 180 / .pi))
+                .shadow(color: .white.opacity(0.8), radius: 10)
+            
+            // Tekst
+            Text("SPINNING...")
+                .font(.caption)
+                .foregroundColor(.white)
+                .offset(y: 60)
+        }
+        .onAppear {
+            // Start animaties
+            withAnimation(Animation.linear(duration: 1.5).repeatForever(autoreverses: false)) {
+                rotatie = 2 * .pi
+            }
+            
+            withAnimation(Animation.easeInOut(duration: 0.7).repeatForever(autoreverses: true)) {
+                schaal = 1.3
+                kleurWissel.toggle()
             }
         }
     }
@@ -3222,7 +3231,7 @@ struct SterrenConfetti: View {
     var body: some View {
         TimelineView(.animation) { timeline in
             Canvas { context, size in
-                for (ster, positie, rotatie) in sterrenPosities {
+                for (ster, positie, _) in sterrenPosities {
                     context.draw(Text(ster).font(.system(size: 30)), at: positie, anchor: .center)
                 }
             }

@@ -15,26 +15,26 @@ import UIKit
 class OrientationLock: ObservableObject {
     static let shared = OrientationLock()
     
-    // Oriëntatie-vergrendelingscontroller
-    class PortraitViewController: UIViewController {
+    // Oriëntatie-vergrendelingscontroller - nu aangepast om beide oriëntaties toe te staan
+    class OrientationViewController: UIViewController {
         override var supportedInterfaceOrientations: UIInterfaceOrientationMask {
-            return .portrait
+            return [.portrait, .landscape, .landscapeLeft, .landscapeRight]
         }
         
         override var preferredInterfaceOrientationForPresentation: UIInterfaceOrientation {
-            return .portrait
+            return .portrait // Start in portrait, maar sta draaien toe
         }
         
         override var shouldAutorotate: Bool {
-            return false
+            return true // Sta auto-rotatie toe
         }
     }
     
-    // UIWindow extensie voor oriëntatie-vergrendeling
-    private var orientationLockWindow: UIWindow?
+    // UIWindow extensie voor oriëntatie-beheer
+    private var orientationWindow: UIWindow?
     
     init() {
-        setupOrientationLock()
+        setupOrientationSupport()
         
         // Luisteren naar app-levenscyclus
         NotificationCenter.default.addObserver(
@@ -46,42 +46,29 @@ class OrientationLock: ObservableObject {
     }
     
     @objc func applicationDidBecomeActive() {
-        setupOrientationLock()
-        forcePortraitOrientation()
+        setupOrientationSupport()
     }
     
-    private func setupOrientationLock() {
-        if orientationLockWindow == nil {
+    private func setupOrientationSupport() {
+        if orientationWindow == nil {
             let windowScene = UIApplication.shared.connectedScenes
                 .first(where: { $0.activationState == .foregroundActive }) as? UIWindowScene
             
             if let windowScene = windowScene {
                 let window = UIWindow(windowScene: windowScene)
-                let viewController = PortraitViewController()
+                let viewController = OrientationViewController()
                 window.rootViewController = viewController
                 window.isHidden = false
                 window.isUserInteractionEnabled = false
                 window.backgroundColor = .clear
-                orientationLockWindow = window
+                orientationWindow = window
             }
         }
     }
     
-    func forcePortraitOrientation() {
-        if let windowScene = UIApplication.shared.connectedScenes
-            .first(where: { $0.activationState == .foregroundActive }) as? UIWindowScene {
-            
-            // Forceer portrait oriëntatie
-            let portraitValue = UIInterfaceOrientation.portrait.rawValue
-            UIDevice.current.setValue(portraitValue, forKey: "orientation")
-            
-            // Update window scene oriëntatie
-            windowScene.requestGeometryUpdate(.iOS(interfaceOrientations: .portrait))
-        }
-    }
-    
+    // Niet meer nodig, maar behouden voor achterwaartse compatibiliteit
     func lockOrientation() {
-        forcePortraitOrientation()
+        // Doet niets meer, omdat we beide oriëntaties toestaan
     }
     
     deinit {
@@ -89,19 +76,14 @@ class OrientationLock: ObservableObject {
     }
 }
 
-// OrientationStateModifier voor SwiftUI compatibiliteit
+// OrientationStateModifier gaat nu beide oriëntaties ondersteunen
 struct OrientationStateModifier: ViewModifier {
     @StateObject var orientationLock = OrientationLock.shared
     
     func body(content: Content) -> some View {
         content
             .onAppear {
-                // Vergrendel naar portrait bij verschijnen
-                orientationLock.lockOrientation()
-            }
-            .onReceive(NotificationCenter.default.publisher(for: UIApplication.didBecomeActiveNotification)) { _ in
-                // Vergrendel opnieuw als de app weer actief wordt
-                orientationLock.lockOrientation()
+                // Geen oriëntatie vergrendeling meer
             }
     }
 }
@@ -439,6 +421,8 @@ class SetGameViewModel: ObservableObject {
     func verwerkSpelerPosities(_ posities: [SpelerPositie: SpelerAvatar]) {
         spelerAvatars = posities
         spelerPosities = Array(posities.keys)
+        actieveSpeler = nil  // Zorg ervoor dat er geen actieve speler is bij start multiplayer
+        magKaartenSelecteren = false  // Spelers kunnen pas kaarten selecteren na selectie avatar
         spelFase = .spelen
         model = SetGameModel(aantalSpelers: spelModus.aantalSpelers)
     }
@@ -701,6 +685,8 @@ class SetGameViewModel: ObservableObject {
         toonSuperSetResultaat = false
         geblokkeerdeSpelers.removeAll()
         eindSpelStatistieken = nil
+        actieveSpeler = nil  // Expliciet actieveSpeler resetten
+        magKaartenSelecteren = false  // Ook magKaartenSelecteren op false zetten
         spelStatus = .normaalSpel
     }
 
@@ -720,6 +706,9 @@ class SetGameViewModel: ObservableObject {
             activeerOefenModus()
             startTimer() // Alleen timer starten in oefenmodus
         } else {
+            // In multiplayer mode expliciet actieveSpeler = nil instellen
+            actieveSpeler = nil
+            magKaartenSelecteren = false
             spelFase = .positieKiezen
         }
     }
@@ -2240,93 +2229,162 @@ struct SpelScherm: View {
         ZStack {
             Color.black.ignoresSafeArea()
             VStack {
-                // NAVIGATIEKNOPPEN PERMANENT BOVENAAN PLAATSEN IN OEFENMODUS
-                // Dit garandeert dat ze nooit buiten beeld vallen door safe area issues
-                if viewModel.spelModus == .oefenen {
-                    HStack {
-                        Button(LocalizationManager.text("switch_card")) {
-                            viewModel.wisselWillekeurigeKaart()
-                        }
-                        .padding()
-                        .background(Color.blue.opacity(0.3))
-                        .foregroundColor(.white)
-                        .cornerRadius(10)
-
-                        // Deck teller in het midden
-                        Text("In deck: \(viewModel.aantalKaartenInDeck)")
-                            .foregroundColor(.white)
-                            .padding()
-                            .background(Color.blue.opacity(0.3))
-                            .cornerRadius(10)
-
-                        // Nieuwe knop om te controleren op geldige sets
-                        Button("Check Sets") {
-                            viewModel.checkVoorGeldigeSet()
-                        }
-                        .padding()
-                        .background(Color.green.opacity(0.5))
-                        .foregroundColor(.white)
-                        .cornerRadius(10)
-
-                        Button(LocalizationManager.text("new_game")) {
-                            viewModel.spelFase = .startScherm
-                        }
-                        .padding()
-                        .background(Color.blue.opacity(0.3))
-                        .foregroundColor(.white)
-                        .cornerRadius(10)
-                    }
-                    .padding(.horizontal)
-                    .padding(.top, 10)
-                    .padding(.bottom, 10)
-                }
-                
                 // Speelveld met kaarten
-                LazyVGrid(columns: Array(repeating: GridItem(.flexible()), count: 4), spacing: 10) {
-                    ForEach(viewModel.kaarten) { kaart in
-                        KaartView(
-                            kaart: kaart,
-                            isGeselecteerd: viewModel.geselecteerdeKaarten.contains(kaart),
-                            isVerlicht: viewModel.verlichtKaart == kaart,
-                            viewModel: viewModel
-                        )
-                        .aspectRatio(2/3, contentMode: .fit)
-                        .onTapGesture {
-                            print("DEBUG: Kaart tap gedetecteerd voor kaart \(kaart.id)")
-                            viewModel.selecteerKaart(kaart)
+                ZStack {
+                    // Kaarten grid - volledig opnieuw ontworpen voor betere zichtbaarheid
+                    GeometryReader { geometry in
+                        let isLandscape = geometry.size.width > geometry.size.height
+                        
+                        if isLandscape {
+                            // Landscape layout met 4x3 grid en horizontale kaarten
+                            VStack(spacing: 12) {
+                                ForEach(0..<3) { row in
+                                    HStack(spacing: 12) {
+                                        ForEach(0..<4) { col in
+                                            let index = row * 4 + col
+                                            if index < viewModel.kaarten.count {
+                                                let kaart = viewModel.kaarten[index]
+                                                
+                                                // Horizontale kaart zonder rotatie
+                                                LandscapeKaartView(
+                                                    kaart: kaart,
+                                                    isGeselecteerd: viewModel.geselecteerdeKaarten.contains(kaart),
+                                                    isVerlicht: viewModel.verlichtKaart == kaart,
+                                                    viewModel: viewModel
+                                                )
+                                                .aspectRatio(3/2, contentMode: .fit) // Liggende aspectratio
+                                                .onTapGesture {
+                                                    viewModel.selecteerKaart(kaart)
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                            .padding(.vertical, 65) // Ruimte voor knoppen
+                            .padding(.horizontal, 15)
+                        } else {
+                            // 3x4 layout (3 rijen, 4 kolommen) - portrait modus
+                            VStack(spacing: 10) {
+                                ForEach(0..<3) { row in
+                                    HStack(spacing: 10) {
+                                        ForEach(0..<4) { col in
+                                            let index = row * 4 + col
+                                            if index < viewModel.kaarten.count {
+                                                let kaart = viewModel.kaarten[index]
+                                                KaartView(
+                                                    kaart: kaart,
+                                                    isGeselecteerd: viewModel.geselecteerdeKaarten.contains(kaart),
+                                                    isVerlicht: viewModel.verlichtKaart == kaart,
+                                                    viewModel: viewModel
+                                                )
+                                                .aspectRatio(2/3, contentMode: .fit)
+                                                .frame(minWidth: 0, maxWidth: .infinity, minHeight: 0, maxHeight: .infinity)
+                                                .onTapGesture {
+                                                    viewModel.selecteerKaart(kaart)
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                            .padding(.vertical, 65) // Ruimte voor de knoppen boven en onder
+                            .padding(.horizontal, 12)
                         }
-                        // Verwijder de disabled modifier zodat kaarten altijd reageren op taps
-                        // De selecteerKaart functie bepaalt intern of de tap geldig is
                     }
-                }
-                .padding()
-                
-                if viewModel.spelModus == .oefenen {
-                    HStack(spacing: 15) {
-                        Button(action: {
-                            viewModel.geefHint()
-                        }) {
-                            Text("HINT")
-                                .font(.headline)
-                                .padding()
-                                .background(Color.orange)
+                    
+                    // Knoppen balk bovenaan, boven op de kaarten (aangepast met een achtergrond voor betere zichtbaarheid)
+                    VStack {
+                        // Navigatieknoppen als overlay bovenaan met licht ondoorzichtige achtergrond
+                        ZStack {
+                            // Achtergrond voor betere zichtbaarheid
+                            Rectangle()
+                                .fill(Color.black.opacity(0.5))
+                                .frame(height: 60)
+                            
+                            // Knoppen
+                            HStack {
+                                Button(LocalizationManager.text("switch_card")) {
+                                    viewModel.wisselWillekeurigeKaart()
+                                }
+                                .padding(.horizontal, 10)
+                                .padding(.vertical, 8)
+                                .background(Color.blue.opacity(0.8))
                                 .foregroundColor(.white)
                                 .cornerRadius(10)
-                        }
-                        .disabled(viewModel.aantalHintsGetoond >= 2)
-                        .opacity(viewModel.aantalHintsGetoond >= 2 ? 0.5 : 1)
-                        
-                        Text("\(viewModel.aantalMogelijkeSets) SETS")
-                            .font(.headline)
-                            .padding()
-                            .background(Color.purple.opacity(0.7))
-                            .foregroundColor(.white)
-                            .cornerRadius(10)
-                            .onTapGesture {
-                                viewModel.toonEenSet()
+
+                                // Deck teller in het midden
+                                Text("In deck: \(viewModel.aantalKaartenInDeck)")
+                                    .foregroundColor(.white)
+                                    .padding(.horizontal, 10)
+                                    .padding(.vertical, 8)
+                                    .background(Color.blue.opacity(0.8))
+                                    .cornerRadius(10)
+
+                                // Nieuwe knop om te controleren op geldige sets
+                                Button("Check Sets") {
+                                    viewModel.checkVoorGeldigeSet()
+                                }
+                                .padding(.horizontal, 10)
+                                .padding(.vertical, 8)
+                                .background(Color.green.opacity(0.8))
+                                .foregroundColor(.white)
+                                .cornerRadius(10)
+
+                                Button(LocalizationManager.text("new_game")) {
+                                    viewModel.spelFase = .startScherm
+                                }
+                                .padding(.horizontal, 10)
+                                .padding(.vertical, 8)
+                                .background(Color.blue.opacity(0.8))
+                                .foregroundColor(.white)
+                                .cornerRadius(10)
                             }
+                            .padding(.horizontal)
+                        }
+                        
+                        Spacer()
+                        
+                        // HINT knoppen onderaan maar nog steeds op de kaarten
+                        if viewModel.spelModus == .oefenen {
+                            ZStack {
+                                // Achtergrond voor betere zichtbaarheid
+                                Rectangle()
+                                    .fill(Color.black.opacity(0.5))
+                                    .frame(height: 60)
+                                
+                                HStack(spacing: 15) {
+                                    Button(action: {
+                                        viewModel.geefHint()
+                                    }) {
+                                        Text("HINT")
+                                            .font(.headline)
+                                            .padding(.horizontal, 10)
+                                            .padding(.vertical, 8)
+                                            .background(Color.orange.opacity(0.9))
+                                            .foregroundColor(.white)
+                                            .cornerRadius(10)
+                                    }
+                                    .disabled(viewModel.aantalHintsGetoond >= 2)
+                                    .opacity(viewModel.aantalHintsGetoond >= 2 ? 0.5 : 1)
+                                    
+                                    Spacer()
+                                    
+                                    Text("\(viewModel.aantalMogelijkeSets) SETS")
+                                        .font(.headline)
+                                        .padding(.horizontal, 10)
+                                        .padding(.vertical, 8)
+                                        .background(Color.purple.opacity(0.9))
+                                        .foregroundColor(.white)
+                                        .cornerRadius(10)
+                                        .onTapGesture {
+                                            viewModel.toonEenSet()
+                                        }
+                                }
+                                .padding(.horizontal)
+                            }
+                        }
                     }
-                    .padding()
                 }
                 
                 // Spelinfo
@@ -2339,47 +2397,8 @@ struct SpelScherm: View {
                 }
                 .padding()
                 
-                // NAVIGATIEKNOPPEN ALLEEN TONEN ALS NIET IN OEFENMODUS
-                if viewModel.spelModus != .oefenen {
-                    HStack {
-                        Button(LocalizationManager.text("switch_card")) {
-                            viewModel.wisselWillekeurigeKaart()
-                        }
-                        .padding()
-                        .background(Color.blue.opacity(0.3))
-                        .foregroundColor(.white)
-                        .cornerRadius(10)
-
-                        // Deck teller in het midden
-                        Text("In deck: \(viewModel.aantalKaartenInDeck)")
-                            .foregroundColor(.white)
-                            .padding()
-                            .background(Color.blue.opacity(0.3))
-                            .cornerRadius(10)
-
-                        // Nieuwe knop om te controleren op geldige sets
-                        Button("Check Sets") {
-                            viewModel.checkVoorGeldigeSet()
-                        }
-                        .padding()
-                        .background(Color.green.opacity(0.5))
-                        .foregroundColor(.white)
-                        .cornerRadius(10)
-
-                        Button(LocalizationManager.text("new_game")) {
-                            viewModel.spelFase = .startScherm
-                        }
-                        .padding()
-                        .background(Color.blue.opacity(0.3))
-                        .foregroundColor(.white)
-                        .cornerRadius(10)
-                        
-                        // Debug knop voor het testen van de avatar melding verwijderd
-                    }
-                    .padding(.horizontal)
-                    .padding(.top)
-                    .padding(.bottom, 5)
-                }
+                // NAVIGATIEKNOPPEN ALLEEN TONEN ALS NIET IN OEFENMODUS - nu verwijderd omdat ze al in de ZStack staan
+                
             }
             .blur(radius: viewModel.toonGeldigeSet || viewModel.toonOngeldigeSet ? 3 : 0)
             
@@ -2924,24 +2943,23 @@ struct KaartView: View {
     
     @ViewBuilder
     private func vormMetVulling<T: Shape>(_ shape: T) -> some View {
+        let kleurUitEnum = kleurVoorEnum(kaart.kleur)
+        
         switch kaart.vulling {
         case .volledig:
-            shape.fill(vormKleur)
+            shape.fill(kleurUitEnum)
         case .leeg:
-            shape.stroke(vormKleur, lineWidth: 2)
+            shape.stroke(kleurUitEnum, lineWidth: 2)
         case .gestippeld:
-            shape
-                .stroke(vormKleur, lineWidth: 2)
-                .overlay(
-                    shape
-                        .fill(vormKleur)
-                        .opacity(0.3)
-                )
+            ZStack {
+                shape.stroke(kleurUitEnum, lineWidth: 2)
+                shape.fill(kleurUitEnum).opacity(0.3)
+            }
         }
     }
     
-    private var vormKleur: Color {
-        switch kaart.kleur {
+    private func kleurVoorEnum(_ kleurEnum: SetCard.CardKleur) -> Color {
+        switch kleurEnum {
         case .rood:
             return .red
         case .groen:
@@ -3249,5 +3267,187 @@ struct SlowPulseEffect: ViewModifier {
             .onAppear {
                 pulse = true
             }
+    }
+}
+
+// Nieuwe view voor gekantelde kaartinhoud - voeg deze toe ergens buiten de SpelScherm view
+struct GekanteldeKaartInhoud: View {
+    let kaart: SetCard
+    let isGeselecteerd: Bool
+    let isVerlicht: Bool
+    let viewModel: SetGameViewModel
+    
+    var body: some View {
+        // Gebruik de originele KaartView maar zonder de witte achtergrond
+        // omdat die al door de container wordt verzorgd
+        ZStack {
+            // Teken alleen de inhoud, niet de kaart zelf
+            VStack(spacing: 5) {
+                ForEach(0..<kaart.aantal, id: \.self) { _ in
+                    kaartFiguur
+                }
+            }
+            .padding(8)
+            .rotationEffect(.degrees(90)) // Roteer de inhoud
+        }
+    }
+    
+    @ViewBuilder
+    private var kaartFiguur: some View {
+        switch kaart.vorm {
+        case .ruit:
+            vormMetVulling(RuitVorm())
+        case .rechthoek:
+            vormMetVulling(RoundedRectangle(cornerRadius: 4))
+        case .ovaal:
+            vormMetVulling(Capsule())
+        }
+    }
+    
+    @ViewBuilder
+    private func vormMetVulling<T: Shape>(_ vorm: T) -> some View {
+        let kleurUitEnum = kleurVoorEnum(kaart.kleur)
+        
+        switch kaart.vulling {
+        case .volledig:
+            vorm.fill(kleurUitEnum)
+        case .leeg:
+            vorm.stroke(kleurUitEnum, lineWidth: 2)
+        case .gestippeld:
+            vorm.stroke(kleurUitEnum, style: StrokeStyle(lineWidth: 2, dash: [6, 3]))
+        }
+    }
+    
+    private func kleurVoorEnum(_ kleurEnum: SetCard.CardKleur) -> Color {
+        switch kleurEnum {
+        case .rood:
+            return .red
+        case .groen:
+            return .green
+        case .paars:
+            return .purple
+        }
+    }
+}
+
+// Nieuwe view specifiek voor landscape-georiënteerde kaarten
+struct LandscapeKaartView: View {
+    let kaart: SetCard
+    let isGeselecteerd: Bool
+    let isVerlicht: Bool
+    let viewModel: SetGameViewModel
+    
+    var randKleur: Color {
+        if isVerlicht {
+            // Een felle, neon-achtige kleur die pulseert
+            return .yellow.opacity(0.8 + 0.2 * sin(Date().timeIntervalSince1970 * 3))
+        } else if viewModel.isKaartGeselecteerdVoorSuperSet(kaart) {
+            return .purple
+        } else if viewModel.superSetKaarten.contains(kaart) {
+            return .purple
+        } else if viewModel.isKaartInOrigineleSet(kaart) {
+            return .blue
+        } else if isGeselecteerd {
+            return .blue
+        } else if viewModel.hintKaarten.contains(kaart) &&
+                  viewModel.hintKaarten.firstIndex(of: kaart)! < viewModel.aantalHintsGetoond {
+            return .orange  // of een andere kleur voor hints
+        }
+        return .gray
+    }
+    
+    var randDikte: CGFloat {
+        if isVerlicht {
+            return 12  // Veel dikkere rand
+        } else if isGeselecteerd ||
+                  viewModel.isKaartInOrigineleSet(kaart) ||
+                  viewModel.superSetKaarten.contains(kaart) ||
+                  (viewModel.hintKaarten.contains(kaart) &&
+                   viewModel.hintKaarten.firstIndex(of: kaart)! < viewModel.aantalHintsGetoond) {
+            return 8
+        }
+        return 2
+    }
+    
+    var body: some View {
+        GeometryReader { geometry in
+            ZStack {
+                // Witte achtergrond met rand
+                let vorm = RoundedRectangle(cornerRadius: 10)
+                vorm.fill().foregroundColor(.white)
+                vorm.strokeBorder(
+                    randKleur,
+                    lineWidth: randDikte
+                )
+                
+                // Horizontale layout voor de symbolen
+                HStack(spacing: 5) {
+                    ForEach(0..<kaart.aantal, id: \.self) { _ in
+                        kaartVorm
+                            .frame(width: geometry.size.width * 0.22, height: geometry.size.height * 0.6)
+                            .aspectRatio(contentMode: .fit)
+                    }
+                }
+                .padding(8)
+                
+                if isVerlicht {
+                    RoundedRectangle(cornerRadius: 10)
+                        .stroke(
+                            LinearGradient(
+                                colors: [.yellow, .orange, .red, .orange, .yellow],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            ),
+                            lineWidth: randDikte
+                        )
+                }
+            }
+            .scaleEffect(isVerlicht ? 1.05 : 1.0)
+            .brightness(isVerlicht ? 0.1 : 0)
+            .animation(.easeInOut(duration: 0.5), value: isVerlicht)
+        }
+    }
+    
+    @ViewBuilder
+    private var kaartVorm: some View {
+        switch kaart.vorm {
+        case .ruit:
+            vormMetVulling(RuitVorm())
+        case .rechthoek:
+            vormMetVulling(RoundedRectangle(cornerRadius: 4))
+        case .ovaal:
+            vormMetVulling(Capsule())
+        }
+    }
+    
+    @ViewBuilder
+    private func vormMetVulling<T: Shape>(_ shape: T) -> some View {
+        let kleurUitEnum = kleurVoorEnum(kaart.kleur)
+        
+        switch kaart.vulling {
+        case .volledig:
+            shape.fill(kleurUitEnum)
+        case .leeg:
+            shape.stroke(kleurUitEnum, lineWidth: 2)
+        case .gestippeld:
+            ZStack {
+                shape.stroke(kleurUitEnum, lineWidth: 2)
+                Rectangle()
+                    .fill(kleurUitEnum)
+                    .opacity(0.3)
+                    .mask(shape)
+            }
+        }
+    }
+    
+    private func kleurVoorEnum(_ kleurEnum: SetCard.CardKleur) -> Color {
+        switch kleurEnum {
+        case .rood:
+            return .red
+        case .groen:
+            return .green
+        case .paars:
+            return .purple
+        }
     }
 }

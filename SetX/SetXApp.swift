@@ -127,7 +127,7 @@ class LocalizationManager {
     var selectedLanguage: Language = .english
     
     private let texts: [String: String] = [
-        "title": "SuperSET 2025",
+        "title": "SetX",
         "new_here": "SET",
         "learn_set": "the rules",
         "practice": "Practice SET",
@@ -151,9 +151,9 @@ class LocalizationManager {
         "valid_set": "Valid SET!",
         "invalid_set": "BUMMER - not a valid set! You will miss the next turn",
         "super_set_chance": "SUPER SET CHANCE!",
-        "super_set_success": "SUPERset !!! *** 10 points ***",
+        "super_set_success": "Super Set !!! *** 10 points ***",
         "try_super_set": "Want to try making a Super Set?",
-        "yes_points": "SUPERset !!! *** 10 points ***",
+        "yes_points": "Super Set !!! *** 10 points ***",
         "no_points": "No (3 points)",
         "choose_avatar": "Choose your avatar",
         "choose_players": "Choose number of players:",
@@ -168,9 +168,9 @@ class LocalizationManager {
         "bottom_left": "Bottom Left",
         "bottom_right": "Bottom Right",
         "set_success_exclamation": "BOEM!!",
-        "valid_set_with_choice": "Valid SET!! \nWant to win 10 points? \nMake a SUPERset! \nBut ... WRONG set? NO points!",
+        "valid_set_with_choice": "Valid SET!! \nWant to win 10 points? \nMake a Super Set! \nBut ... WRONG set? NO points!",
             "what_do_you_do": "WHAT DO YOU DO:",
-            "yes_super_set": "I'll go for the SUPERset",
+            "yes_super_set": "I'll go for the Super Set",
             "no_keep_points": "No - I'll just keep my 3 points",
         "super_set_fail": "BUMMER wrong SET. You loose your points.",
         "set_fail_exclamation": "OOPS!",
@@ -741,33 +741,65 @@ class SetGameViewModel: ObservableObject {
         }
     }
     private func vindGeldigeSet() -> [SetCard]? {
-           let alleKaarten = kaarten
-           for i in 0..<alleKaarten.count {
-               for j in (i+1)..<alleKaarten.count {
-                   for k in (j+1)..<alleKaarten.count {
-                       let mogelijkeSet = [alleKaarten[i], alleKaarten[j], alleKaarten[k]]
-                       if model.isSet(mogelijkeSet) {
-                           return mogelijkeSet
-                       }
-                   }
-               }
-           }
-           return nil
-       }
+        // Gebruik de kaarten uit het model in plaats van de lokale variabele
+        let alleKaarten = model.kaarten
+        
+        // Debug info
+        print("DEBUG: Zoeken naar geldige set tussen \(alleKaarten.count) kaarten")
+        
+        // Loop door alle mogelijke combinaties
+        for i in 0..<alleKaarten.count {
+            for j in (i+1)..<alleKaarten.count {
+                for k in (j+1)..<alleKaarten.count {
+                    let mogelijkeSet = [alleKaarten[i], alleKaarten[j], alleKaarten[k]]
+                    if model.isSet(mogelijkeSet) {
+                        print("DEBUG: Geldige set gevonden: \(mogelijkeSet.map { $0.id })")
+                        return mogelijkeSet
+                    }
+                }
+            }
+        }
+        
+        print("DEBUG: Geen geldige set gevonden")
+        return nil
+    }
     func geefHint() {
-            guard spelModus == .oefenen else { return }
-            guard aantalHintsGetoond < 2 else { return }
+        guard spelModus == .oefenen else { return }
+        guard aantalHintsGetoond < 2 else { return }
+        
+        // Controleer of er een geldige set is
+        if let geldigeSet = vindGeldigeSet() {
+            // Update hintKaarten met de gevonden set
+            hintKaarten = geldigeSet
             
-            if hintKaarten.isEmpty {
-                if let geldigeSet = vindGeldigeSet() {
-                    hintKaarten = geldigeSet
+            // Bij de eerste hint lichten we de eerste kaart op, bij de tweede hint de eerste en tweede kaart
+            aantalHintsGetoond += 1
+            
+            // Verbeterde hint visualisatie - laat de juiste kaarten na elkaar oplichten
+            if aantalHintsGetoond == 1 {
+                // Bij de eerste hint, laat alleen de eerste kaart oplichten
+                verlichtKaart = geldigeSet[0]
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) {
+                    self.verlichtKaart = nil
+                }
+            } else if aantalHintsGetoond == 2 {
+                // Bij de tweede hint, licht eerst de eerste kaart op, dan de tweede
+                verlichtKaart = geldigeSet[0]
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) {
+                    self.verlichtKaart = geldigeSet[1]
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) {
+                        self.verlichtKaart = nil
+                    }
                 }
             }
             
-            if !hintKaarten.isEmpty {
-                aantalHintsGetoond += 1
-            }
+            // Log voor debug
+            print("DEBUG: Hint \(aantalHintsGetoond) gegeven voor kaarten: \(geldigeSet.map { $0.id })")
+        } else {
+            // Log dat er geen geldige set is gevonden
+            print("DEBUG: Geen geldige set gevonden voor hint")
         }
+    }
         
         func resetHints() {
             hintKaarten.removeAll()
@@ -1374,7 +1406,7 @@ struct StartScherm: View {
                     // What is a SUPER-set knop
                     MenuButton(
                         icon: "star.circle.fill",
-                        title: "What is a SUPER-set",
+                        title: "What is a Super Set",
                         subtitle: "Learn about the special challenge",
                         isHovered: hoverButton == 1,
                         gradientColors: [Color(red: 0.0, green: 0.7, blue: 0.4), Color(red: 0.0, green: 0.5, blue: 0.7)],
@@ -1556,14 +1588,14 @@ struct StartScherm: View {
             ScrollView(.vertical, showsIndicators: true) {
                 VStack(spacing: 30) {
                     // Titel met glow effect
-                    Text("What is a SUPER-set?")
+                    Text("What is a Super Set?")
                         .font(.system(size: 42, weight: .bold))
                         .foregroundColor(.white)
                         .shadow(color: .purple.opacity(0.8), radius: 8, x: 0, y: 0)
                         .padding(.top, 30)
                     
                     // Verbeterde uitleg van Superset
-                    uitlegBox(tekst: "A SUPER-set is an exciting challenge that appears after finding a normal SET!", kleur: .purple)
+                    uitlegBox(tekst: "A Super Set is an exciting challenge that appears after finding a normal SET!", kleur: .purple)
                     
                     // Visuele uitleg van Superset met kaarten
                     VStack(spacing: 20) {
@@ -2574,7 +2606,7 @@ struct SpelScherm: View {
             Button(action: {
                 viewModel.geenSuperSetGevonden()
             }) {
-                Text("I SEE NO SUPERSET")
+                Text("I SEE NO SUPER SET")
                     .font(.headline)
                     .padding()
                     .background(
@@ -2876,7 +2908,8 @@ struct KaartView: View {
             return .blue
         } else if viewModel.hintKaarten.contains(kaart) &&
                   viewModel.hintKaarten.firstIndex(of: kaart)! < viewModel.aantalHintsGetoond {
-            return .orange  // of een andere kleur voor hints
+            // Fellere contrasterende kleur voor hints
+            return Color.orange.opacity(0.9)
         }
         return .gray
     }
@@ -2884,14 +2917,15 @@ struct KaartView: View {
     var randDikte: CGFloat {
         if isVerlicht {
             return 12  // Veel dikkere rand
+        } else if (viewModel.hintKaarten.contains(kaart) &&
+                  viewModel.hintKaarten.firstIndex(of: kaart)! < viewModel.aantalHintsGetoond) {
+            return 10  // Dikkere rand voor hints
         } else if isGeselecteerd ||
                   viewModel.isKaartInOrigineleSet(kaart) ||
-                  viewModel.superSetKaarten.contains(kaart) ||
-                  (viewModel.hintKaarten.contains(kaart) &&
-                   viewModel.hintKaarten.firstIndex(of: kaart)! < viewModel.aantalHintsGetoond) {
-            return 8
+                  viewModel.superSetKaarten.contains(kaart) {
+            return 8  // Standaard dikte voor selectie
         }
-        return 2
+        return 2  // Normale dikte
     }
     
     var body: some View {
@@ -2921,6 +2955,16 @@ struct KaartView: View {
                             ),
                             lineWidth: randDikte
                         )
+                }
+                
+                // Extra pulserende rand voor hint kaarten
+                if viewModel.hintKaarten.contains(kaart) &&
+                   viewModel.hintKaarten.firstIndex(of: kaart)! < viewModel.aantalHintsGetoond {
+                    RoundedRectangle(cornerRadius: 10)
+                        .stroke(Color.orange, lineWidth: 4)
+                        .opacity(0.5)
+                        .scaleEffect(1.03)
+                        .animation(Animation.easeInOut(duration: 1.0).repeatForever(autoreverses: true), value: viewModel.aantalHintsGetoond)
                 }
             }
             .scaleEffect(isVerlicht ? 1.05 : 1.0)  // Kleinere vergroting
@@ -3351,7 +3395,8 @@ struct LandscapeKaartView: View {
             return .blue
         } else if viewModel.hintKaarten.contains(kaart) &&
                   viewModel.hintKaarten.firstIndex(of: kaart)! < viewModel.aantalHintsGetoond {
-            return .orange  // of een andere kleur voor hints
+            // Fellere contrasterende kleur voor hints
+            return Color.orange.opacity(0.9)
         }
         return .gray
     }
@@ -3359,14 +3404,15 @@ struct LandscapeKaartView: View {
     var randDikte: CGFloat {
         if isVerlicht {
             return 12  // Veel dikkere rand
+        } else if (viewModel.hintKaarten.contains(kaart) &&
+                  viewModel.hintKaarten.firstIndex(of: kaart)! < viewModel.aantalHintsGetoond) {
+            return 10  // Dikkere rand voor hints
         } else if isGeselecteerd ||
                   viewModel.isKaartInOrigineleSet(kaart) ||
-                  viewModel.superSetKaarten.contains(kaart) ||
-                  (viewModel.hintKaarten.contains(kaart) &&
-                   viewModel.hintKaarten.firstIndex(of: kaart)! < viewModel.aantalHintsGetoond) {
-            return 8
+                  viewModel.superSetKaarten.contains(kaart) {
+            return 8  // Standaard dikte voor selectie
         }
-        return 2
+        return 2  // Normale dikte
     }
     
     var body: some View {
@@ -3400,6 +3446,16 @@ struct LandscapeKaartView: View {
                             ),
                             lineWidth: randDikte
                         )
+                }
+                
+                // Extra pulserende rand voor hint kaarten
+                if viewModel.hintKaarten.contains(kaart) &&
+                   viewModel.hintKaarten.firstIndex(of: kaart)! < viewModel.aantalHintsGetoond {
+                    RoundedRectangle(cornerRadius: 10)
+                        .stroke(Color.orange, lineWidth: 4)
+                        .opacity(0.5)
+                        .scaleEffect(1.03)
+                        .animation(Animation.easeInOut(duration: 1.0).repeatForever(autoreverses: true), value: viewModel.aantalHintsGetoond)
                 }
             }
             .scaleEffect(isVerlicht ? 1.05 : 1.0)

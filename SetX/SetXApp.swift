@@ -1784,11 +1784,11 @@ struct MenuButton: View {
     
     var body: some View {
         Button(action: action) {
-            HStack {
+            HStack(spacing: 0) {
                 Image(systemName: icon)
                     .font(.system(size: 35, weight: .bold))
                     .foregroundColor(.white)
-                    .frame(width: 70)
+                    .frame(width: 50)
                     .shadow(color: .black.opacity(0.3), radius: 5)
                 
                 VStack(alignment: .leading, spacing: 4) {

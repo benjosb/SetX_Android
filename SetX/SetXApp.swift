@@ -293,7 +293,7 @@ class SetGameViewModel: ObservableObject {
     @Published private var spelStatus: SpelStatus = .normaalSpel
 
     enum SpelModus {
-        case oefenen, tweeSpelers, drieSpelers, vierSpelers
+        case oefenen, tweeSpelers, drieSpelers, vierSpelers, realtimeMultiplayer
         
         var aantalSpelers: Int {
             switch self {
@@ -301,6 +301,7 @@ class SetGameViewModel: ObservableObject {
             case .tweeSpelers: return 2
             case .drieSpelers: return 3
             case .vierSpelers: return 4
+            case .realtimeMultiplayer: return 2
             }
         }
         
@@ -310,6 +311,7 @@ class SetGameViewModel: ObservableObject {
             case .drieSpelers: return [.linksBoven, .rechtsBoven, .linksOnder]
             case .vierSpelers: return [.linksBoven, .rechtsBoven, .linksOnder, .rechtsOnder]
             case .oefenen: return []
+            case .realtimeMultiplayer: return [.linksBoven, .rechtsBoven]
             }
         }
     }
@@ -1322,7 +1324,11 @@ struct GameContentView: View {
             case .startScherm:
                 StartScherm(viewModel: viewModel)
             case .positieKiezen:
-                PositieKeuzeView(viewModel: viewModel)
+                if viewModel.spelModus == .realtimeMultiplayer {
+                    RealtimeMultiplayerView(viewModel: viewModel)
+                } else {
+                    PositieKeuzeView(viewModel: viewModel)
+                }
             case .spelen:
                 SpelScherm(viewModel: viewModel, geometry: geometry)
             case .eindSpel:
@@ -1451,6 +1457,23 @@ struct StartScherm: View {
                     .onHover { isHovered in
                         withAnimation(.easeInOut(duration: 0.2)) {
                             hoverButton = isHovered ? 3 : nil
+                        }
+                    }
+                    
+                    // Realtime Multiplayer knop
+                    MenuButton(
+                        icon: "globe",
+                        title: "Realtime Multiplayer",
+                        subtitle: "Play with friends online",
+                        isHovered: hoverButton == 4,
+                        gradientColors: [Color(red: 0.8, green: 0.2, blue: 0.8), Color(red: 0.6, green: 0.2, blue: 1.0)],
+                        action: {
+                            withAnimation { viewModel.startNieuwSpel(modus: .realtimeMultiplayer) }
+                        }
+                    )
+                    .onHover { isHovered in
+                        withAnimation(.easeInOut(duration: 0.2)) {
+                            hoverButton = isHovered ? 4 : nil
                         }
                     }
                 }

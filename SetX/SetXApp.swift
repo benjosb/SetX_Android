@@ -1354,6 +1354,13 @@ struct StartScherm: View {
         Color(red: 0.1, green: 0.4, blue: 0.9)     // Koningsblauw
     ]
     
+    // Voeg een computed property toe voor het versienummer
+    private var versionString: String {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "yyyyMMdd.HHmm"
+        return formatter.string(from: Date())
+    }
+    
     var body: some View {
         ZStack {
             // Dynamische achtergrond
@@ -1481,8 +1488,11 @@ struct StartScherm: View {
                 
                 Spacer()
                 
-                // Test knop voor eindanimatie verwijderd
-                
+                // Voeg versienummer toe
+                Text("v\(versionString)")
+                    .font(.caption)
+                    .foregroundColor(.white.opacity(0.6))
+                    .padding(.bottom, 10)
             }
             
             if toonSetUitleg {
